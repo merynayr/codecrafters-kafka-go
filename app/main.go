@@ -12,6 +12,10 @@ import (
 const maxMessageSize = 100 << 20 // 100 MiB
 
 type Request struct {
+	requestApiKey     int16
+	requestApiVersion int16
+	correlationID     int32
+	// clientID          string
 	body []byte
 }
 
@@ -41,11 +45,12 @@ func main() {
 func handleConn(conn net.Conn) error {
 	defer conn.Close()
 
-	if _, err := readRequest(conn); err != nil {
+	req, err := readRequest(conn)
+	if err != nil {
 		return fmt.Errorf("read request: %w", err)
 	}
 
-	header := ResponseHeader{correlationID: 7}
+	header := ResponseHeader{correlationID: req.correlationID}
 	if err := writeResponse(conn, header); err != nil {
 		return fmt.Errorf("write response: %w", err)
 	}
@@ -61,11 +66,27 @@ func readRequest(r io.Reader) (Request, error) {
 		return Request{}, fmt.Errorf("invalid message size %d, limit %d", size, maxMessageSize)
 	}
 
-	body := make([]byte, size)
+	var requestApiKey int16
+	if err := binary.Read(r, binary.BigEndian, &requestApiKey); err != nil {
+		return Request{}, fmt.Errorf("read message size: %w", err)
+	}
+
+	var requestApiVersion int16
+	if err := binary.Read(r, binary.BigEndian, &requestApiVersion); err != nil {
+		return Request{}, fmt.Errorf("read message size: %w", err)
+	}
+
+	var correlationID int32
+	if err := binary.Read(r, binary.BigEndian, &correlationID); err != nil {
+		return Request{}, fmt.Errorf("read message size: %w", err)
+	}
+
+	body := make([]byte, size-int32(binary.Size(requestApiKey)+binary.Size(requestApiVersion)+binary.Size(correlationID)))
 	if _, err := io.ReadFull(r, body); err != nil {
 		return Request{}, fmt.Errorf("read message body: %w", err)
 	}
-	return Request{body: body}, nil
+
+	return Request{requestApiKey: requestApiKey, requestApiVersion: requestApiVersion, correlationID: correlationID, body: body}, nil
 }
 
 func writeResponse(w io.Writer, header ResponseHeader) error {
