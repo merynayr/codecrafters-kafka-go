@@ -71,3 +71,13 @@ func readTaggedFields(r *bytes.Reader) (map[uint32][]byte, error) {
 	}
 	return fields, nil
 }
+
+// appendInt16 appends v as Kafka INT16.
+func appendInt16(b []byte, v int16) []byte {
+	return binary.BigEndian.AppendUint16(b, uint16(v))
+}
+
+// appendInt32 appends v as Kafka INT32.
+func appendInt32(b []byte, v int32) []byte {
+	return binary.BigEndian.AppendUint32(b, uint32(v))
+}

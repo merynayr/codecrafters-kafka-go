@@ -25,6 +25,10 @@ func main() {
 	}
 }
 
+var handlers = map[int16]func(Request) ResponseBody{
+	apiKeyAPIVersions: handleAPIVersions,
+}
+
 func handleConn(conn net.Conn) error {
 	defer conn.Close()
 
@@ -33,17 +37,22 @@ func handleConn(conn net.Conn) error {
 		return fmt.Errorf("read frame: %w", err)
 	}
 
-	req, err := parseRequest(msg)
+	req, err := decodeRequest(msg)
 	if err != nil {
-		return fmt.Errorf("parse request: %w", err)
+		return fmt.Errorf("decode request: %w", err)
+	}
+
+	handle, ok := handlers[req.apiKey]
+	if !ok {
+		return fmt.Errorf("unknown api key %d", req.apiKey)
 	}
 
 	header := ResponseHeader{correlationID: req.correlationID}
-	if req.apiVersion < 0 || req.apiVersion > 4 {
-		header.errorCode = 35
-	}
+	body := handle(req)
 
-	if err := writeResponse(conn, header); err != nil {
+	buf := encodeResponse(header, body)
+
+	if err := writeFrame(conn, buf); err != nil {
 		return fmt.Errorf("write response: %w", err)
 	}
 	return nil

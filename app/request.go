@@ -16,7 +16,7 @@ type Request struct {
 	body          []byte
 }
 
-func parseRequest(msg []byte) (Request, error) {
+func decodeRequest(msg []byte) (Request, error) {
 	r := bytes.NewReader(msg)
 
 	var req Request
