@@ -14,22 +14,44 @@ func main() {
 	}
 	defer ln.Close()
 
+	b := newBroker()
+
 	conn, err := ln.Accept()
 	if err != nil {
 		fmt.Println("Error accepting connection:", err)
 		os.Exit(1)
 	}
 
-	if err := handleConn(conn); err != nil {
+	if err := b.handleConn(conn); err != nil {
 		fmt.Println("Error handling connection:", err)
 	}
 }
 
-var handlers = map[int16]func(Request) ResponseBody{
-	apiKeyAPIVersions: handleAPIVersions,
+type api struct {
+	minVersion int16
+	maxVersion int16
+	handle     func(Request) ResponseBody
 }
 
-func handleConn(conn net.Conn) error {
+type broker struct {
+	apis map[int16]api // by API key
+}
+
+func newBroker() *broker {
+	b := &broker{}
+	// Handlers need pointer receivers: a method value with a value receiver
+	// would copy b here, before apis is set.
+	b.apis = map[int16]api{
+		apiKeyAPIVersions: {
+			minVersion: apiVersionsMinVersion,
+			maxVersion: apiVersionsMaxVersion,
+			handle:     b.handleAPIVersions,
+		},
+	}
+	return b
+}
+
+func (b *broker) handleConn(conn net.Conn) error {
 	defer conn.Close()
 
 	msg, err := readFrame(conn)
@@ -42,13 +64,13 @@ func handleConn(conn net.Conn) error {
 		return fmt.Errorf("decode request: %w", err)
 	}
 
-	handle, ok := handlers[req.apiKey]
+	a, ok := b.apis[req.apiKey]
 	if !ok {
 		return fmt.Errorf("unknown api key %d", req.apiKey)
 	}
 
 	header := ResponseHeader{correlationID: req.correlationID}
-	body := handle(req)
+	body := a.handle(req)
 
 	buf := encodeResponse(header, body)
 

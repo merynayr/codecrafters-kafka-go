@@ -5,7 +5,9 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"maps"
 	"math"
+	"slices"
 )
 
 // readNullableString returns nil for a null string.
@@ -80,4 +82,28 @@ func appendInt16(b []byte, v int16) []byte {
 // appendInt32 appends v as Kafka INT32.
 func appendInt32(b []byte, v int32) []byte {
 	return binary.BigEndian.AppendUint32(b, uint32(v))
+}
+
+func appendCompactArray[T interface{ AppendTo([]byte) []byte }](b []byte, items []T) []byte {
+	if items == nil {
+		b = binary.AppendUvarint(b, 0)
+	} else {
+		b = binary.AppendUvarint(b, uint64(len(items)+1))
+		for _, v := range items {
+			b = v.AppendTo(b)
+		}
+	}
+
+	return b
+}
+
+func appendTaggedFields(b []byte, fields map[uint32][]byte) []byte {
+	b = binary.AppendUvarint(b, uint64(len(fields)))
+
+	for _, tag := range slices.Sorted(maps.Keys(fields)) {
+		b = binary.AppendUvarint(b, uint64(tag))
+		b = binary.AppendUvarint(b, uint64(len(fields[tag])))
+		b = append(b, fields[tag]...)
+	}
+	return b
 }
