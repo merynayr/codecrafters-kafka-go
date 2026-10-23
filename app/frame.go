@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -22,6 +23,9 @@ func readFrame(r io.Reader) ([]byte, error) {
 
 	payload := make([]byte, size)
 	if _, err := io.ReadFull(r, payload); err != nil {
+		if errors.Is(err, io.EOF) {
+			err = io.ErrUnexpectedEOF
+		}
 		return nil, fmt.Errorf("read payload: %w", err)
 	}
 	return payload, nil
