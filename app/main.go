@@ -57,9 +57,17 @@ func main() {
 }
 
 type api struct {
-	minVersion int16
-	maxVersion int16
-	handle     func(Request) ResponseBody
+	minVersion      int16
+	maxVersion      int16
+	flexibleVersion int16 // first version with Response Header v1, or neverFlexible
+	handle          func(Request) ResponseBody
+}
+
+func (a api) responseHeaderVersion(apiVersion int16) int16 {
+	if a.flexibleVersion == neverFlexible || apiVersion < a.flexibleVersion {
+		return 0
+	}
+	return 1
 }
 
 type broker struct {
@@ -72,9 +80,16 @@ func newBroker() *broker {
 	// would copy b here, before apis is set.
 	b.apis = map[int16]api{
 		apiKeyAPIVersions: {
-			minVersion: apiVersionsMinVersion,
-			maxVersion: apiVersionsMaxVersion,
-			handle:     b.handleAPIVersions,
+			minVersion:      apiVersionsMinVersion,
+			maxVersion:      apiVersionsMaxVersion,
+			flexibleVersion: neverFlexible,
+			handle:          b.handleAPIVersions,
+		},
+		apiKeyFetch: {
+			minVersion:      FetchMinVersion,
+			maxVersion:      FetchMaxVersion,
+			flexibleVersion: FetchFlexibleVersion,
+			handle:          b.handleFetch,
 		},
 	}
 	return b
@@ -105,7 +120,10 @@ func (b *broker) handleConn(conn net.Conn) error {
 			return fmt.Errorf("unknown api key %d", req.apiKey)
 		}
 
-		header := ResponseHeader{correlationID: req.correlationID}
+		header := ResponseHeader{
+			version:       a.responseHeaderVersion(req.apiVersion),
+			correlationID: req.correlationID,
+		}
 		body := a.handle(req)
 
 		buf := encodeResponse(header, body)
