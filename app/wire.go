@@ -10,6 +10,10 @@ import (
 	"slices"
 )
 
+// maxPrealloc caps the capacity reserved for a client-sent item count: an item
+// may take far more memory than its wire bytes, so append grows the rest.
+const maxPrealloc = 64
+
 // readNullableString returns nil for a null string.
 func readNullableString(r *bytes.Reader) (*string, error) {
 	var n int16
@@ -44,7 +48,7 @@ func readTaggedFields(r *bytes.Reader) (map[uint32][]byte, error) {
 		return nil, nil
 	}
 
-	fields := make(map[uint32][]byte, n)
+	fields := make(map[uint32][]byte, min(n, maxPrealloc))
 	for range n {
 		tag, err := binary.ReadUvarint(r)
 		if err != nil {
@@ -123,7 +127,7 @@ func readCompactArray[T any](r *bytes.Reader, readItem func(*bytes.Reader) (T, e
 		return nil, fmt.Errorf("invalid length %d, want 1..%d", n, r.Len()+1)
 	}
 
-	items := make([]T, 0, n-1)
+	items := make([]T, 0, min(n-1, maxPrealloc))
 	for i := range n - 1 {
 		item, err := readItem(r)
 		if err != nil {
