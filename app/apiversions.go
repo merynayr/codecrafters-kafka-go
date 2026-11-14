@@ -31,7 +31,7 @@ func (v APIVersion) AppendTo(b []byte) []byte {
 	return b
 }
 
-func (b *broker) handleAPIVersions(req Request) ResponseBody {
+func (b *broker) handleAPIVersions(req Request) (ResponseBody, error) {
 	body := APIVersionsResponse{errorCode: errorCodeNone}
 	if req.apiVersion < apiVersionsMinVersion || req.apiVersion > apiVersionsMaxVersion {
 		body.errorCode = errorCodeUnsupportedVersion
@@ -46,5 +46,5 @@ func (b *broker) handleAPIVersions(req Request) ResponseBody {
 		})
 	}
 
-	return body
+	return body, nil
 }

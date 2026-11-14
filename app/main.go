@@ -60,7 +60,7 @@ type api struct {
 	minVersion      int16
 	maxVersion      int16
 	flexibleVersion int16 // first version with Response Header v1, or neverFlexible
-	handle          func(Request) ResponseBody
+	handle          func(Request) (ResponseBody, error)
 }
 
 func (a api) responseHeaderVersion(apiVersion int16) int16 {
@@ -124,7 +124,10 @@ func (b *broker) handleConn(conn net.Conn) error {
 			version:       a.responseHeaderVersion(req.apiVersion),
 			correlationID: req.correlationID,
 		}
-		body := a.handle(req)
+		body, err := a.handle(req)
+		if err != nil {
+			return fmt.Errorf("handle request: %w", err)
+		}
 
 		buf := encodeResponse(header, body)
 

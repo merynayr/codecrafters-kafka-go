@@ -74,6 +74,66 @@ func readTaggedFields(r *bytes.Reader) (map[uint32][]byte, error) {
 	return fields, nil
 }
 
+// readInt reads a Kafka INT8, INT16, INT32 or INT64, depending on T.
+func readInt[T int8 | int16 | int32 | int64](r *bytes.Reader) (T, error) {
+	var n T
+	if err := binary.Read(r, binary.BigEndian, &n); err != nil {
+		return 0, fmt.Errorf("read %T: %w", n, err)
+	}
+	return n, nil
+}
+
+// readUUID reads a Kafka UUID: 16 raw bytes with no length prefix.
+func readUUID(r *bytes.Reader) ([16]byte, error) {
+	var uuid [16]byte
+	if _, err := io.ReadFull(r, uuid[:]); err != nil {
+		return [16]byte{}, fmt.Errorf("read UUID: %w", err)
+	}
+
+	return uuid, nil
+}
+
+// readCompactString reads a Kafka COMPACT_STRING, which, unlike
+// COMPACT_NULLABLE_STRING, rejects the null encoding (length 0).
+func readCompactString(r *bytes.Reader) (string, error) {
+	n, err := binary.ReadUvarint(r)
+	if err != nil {
+		return "", fmt.Errorf("read length: %w", err)
+	}
+	if n == 0 || n-1 > uint64(r.Len()) {
+		return "", fmt.Errorf("invalid length %d, want 1..%d", n, r.Len()+1)
+	}
+
+	str := make([]byte, n-1)
+	if _, err := io.ReadFull(r, str); err != nil {
+		return "", fmt.Errorf("read data: %w", err)
+	}
+
+	return string(str), nil
+}
+
+// readCompactArray reads a Kafka COMPACT_ARRAY using readItem for each item.
+// It rejects the null encoding (length 0), so it suits non-nullable arrays only.
+func readCompactArray[T any](r *bytes.Reader, readItem func(*bytes.Reader) (T, error)) ([]T, error) {
+	n, err := binary.ReadUvarint(r)
+	if err != nil {
+		return nil, fmt.Errorf("read length: %w", err)
+	}
+	if n == 0 || n-1 > uint64(r.Len()) {
+		return nil, fmt.Errorf("invalid length %d, want 1..%d", n, r.Len()+1)
+	}
+
+	items := make([]T, 0, n-1)
+	for i := range n - 1 {
+		item, err := readItem(r)
+		if err != nil {
+			return nil, fmt.Errorf("read item %d: %w", i, err)
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
 // appendInt16 appends v as Kafka INT16.
 func appendInt16(b []byte, v int16) []byte {
 	return binary.BigEndian.AppendUint16(b, uint16(v))
