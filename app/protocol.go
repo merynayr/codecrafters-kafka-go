@@ -27,5 +27,5 @@ const neverFlexible int16 = -1
 const (
 	errorCodeNone               int16 = 0
 	errorCodeUnsupportedVersion int16 = 35
-	errorUnknownTopicId         int16 = 100
+	errorCodeUnknownTopicID     int16 = 100
 )

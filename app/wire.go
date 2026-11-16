@@ -148,6 +148,16 @@ func appendInt32(b []byte, v int32) []byte {
 	return binary.BigEndian.AppendUint32(b, uint32(v))
 }
 
+// appendInt64 appends v as Kafka INT64.
+func appendInt64(b []byte, v int64) []byte {
+	return binary.BigEndian.AppendUint64(b, uint64(v))
+}
+
+// appendUUID appends uuid as a Kafka UUID: 16 raw bytes with no length prefix.
+func appendUUID(b []byte, uuid [16]byte) []byte {
+	return append(b, uuid[:]...)
+}
+
 func appendCompactArray[T interface{ AppendTo([]byte) []byte }](b []byte, items []T) []byte {
 	if items == nil {
 		b = binary.AppendUvarint(b, 0)
@@ -168,6 +178,18 @@ func appendTaggedFields(b []byte, fields map[uint32][]byte) []byte {
 		b = binary.AppendUvarint(b, uint64(tag))
 		b = binary.AppendUvarint(b, uint64(len(fields[tag])))
 		b = append(b, fields[tag]...)
+	}
+	return b
+}
+
+// appendCompactNullableBytes appends data as Kafka COMPACT_NULLABLE_BYTES;
+// nil is written as null. COMPACT_NULLABLE_RECORDS uses the same encoding.
+func appendCompactNullableBytes(b []byte, data []byte) []byte {
+	if data == nil {
+		b = binary.AppendUvarint(b, 0)
+	} else {
+		b = binary.AppendUvarint(b, uint64(len(data)+1))
+		b = append(b, data...)
 	}
 	return b
 }
